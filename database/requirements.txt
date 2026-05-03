@@ -1,0 +1,17 @@
+# 会场精灵 - 数据库依赖
+
+# SQLAlchemy - ORM 框架
+SQLAlchemy==2.0.48
+
+# MySQL 驱动
+PyMySQL==1.1.0
+cryptography==42.0.5  # PyMySQL 依赖
+
+# 数据库迁移工具 (可选)
+alembic==1.13.1
+
+# 密码加密
+bcrypt==4.1.2
+
+# 环境变量管理
+python-dotenv==1.0.1
