@@ -1,6 +1,7 @@
 # 会场精灵 (Meeting Assistant) v2.0
 
 > 基于活动信息的智能问答助手 —— 让活动信息触手可及
+> 
 > v2.0 版本尚未正式上线，其中代码工作已完成大半，需等待后端bug修复与功能的完善后准本上线
 > 现仍可体验旧版本v1.2 url： https://vvp9bxbdffh7gnjsskx9hp.streamlit.app/
 
