@@ -48,14 +48,14 @@ async def root():
     return {
         "message": "欢迎使用会场精灵 API",
         "docs": "/api/docs",
-        "version": "1.0.0"
+        "version": "2.0.0"
     }
 
 
 @app.get("/api/health")
 async def health_check():
     """健康检查接口"""
-    return {"status": "ok", "version": "1.0.0"}
+    return {"status": "ok", "version": "2.0.0"}
 
 
 if __name__ == "__main__":
