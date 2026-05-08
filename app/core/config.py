@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     """应用配置"""
     
     PROJECT_NAME: str = "会场精灵"
-    VERSION: str = "1.0.0"
+    VERSION: str = "2.0.0"
     API_PREFIX: str = "/api"
     DEBUG: bool = False
     PORT: int = 8000
