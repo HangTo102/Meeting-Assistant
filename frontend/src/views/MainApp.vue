@@ -376,6 +376,24 @@
               <div class="nav-card-title">🚩 出发地</div>
               <el-input v-model="navForm.startLocation" placeholder="输入您的出发地址" style="margin-bottom: 10px" />
               <el-button style="width: 100%; margin-bottom: 10px" @click="getLocation" :loading="locating">📍 获取当前位置</el-button>
+              <div class="tracking-row">
+                <el-button
+                  :type="tracking ? 'danger' : 'primary'"
+                  plain
+                  style="flex: 1; margin: 0"
+                  @click="toggleTracking"
+                >
+                  {{ tracking ? '⏹ 停止实时追踪' : '🛰️ 开启实时追踪' }}
+                </el-button>
+                <div class="follow-toggle">
+                  <span>🧭 跟随</span>
+                  <el-switch v-model="followMode" size="small" />
+                </div>
+              </div>
+              <div v-if="tracking" class="tracking-status" :class="{ error: trackingFailed }">
+                <span class="tracking-dot"></span>
+                {{ trackingStatus || '正在定位...' }}
+              </div>
             </div>
 
             <!-- 出行方式 -->
@@ -467,6 +485,9 @@ const switchPage = (page) => {
         }
       }, 100)
     })
+  } else if (tracking.value) {
+    // 离开导航页时停止实时追踪，避免后台消耗资源
+    stopTracking()
   }
 }
 
@@ -725,8 +746,18 @@ const navActivities = ref([])
 const locating = ref(false)
 const planningRoute = ref(false)
 const mapLoaded = ref(false)
+const tracking = ref(false)
+const followMode = ref(true)
+const trackingStatus = ref('')
+const trackingFailed = ref(false)
 let mapInstance = null
 let markerInstance = null
+let geolocation = null
+let userMarker = null
+let userAccuracy = null
+let watchTimer = null
+let lastReplanTime = 0
+let trackStarted = false
 
 const loadNavActivities = async () => {
   try {
@@ -791,21 +822,113 @@ const initMap = () => {
       zoom: 12,
       center: [121.473701, 31.230416]
     })
+    
+    // 加载高德定位组件（支持 GPS / 基站 / Wi-Fi / IP 定位，国内可用）
+    window.AMap.plugin('AMap.Geolocation', () => {
+      geolocation = new window.AMap.Geolocation({
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+        convert: true,
+        useNative: true,
+        extensions: 'all',
+        showButton: true,
+        buttonPosition: 'LB',
+        buttonOffset: new window.AMap.Pixel(12, 20),
+        panToLocation: true,
+        zoomToAccuracy: true,
+        showCircle: true,
+        circleOptions: { fillColor: '#3388ff', fillOpacity: 0.15, strokeColor: '#3388ff', strokeWeight: 1 }
+      })
+      mapInstance.addControl(geolocation)
+    })
   })
 }
 
+const applyGeoResult = (result) => {
+  const position = result.position || result.location
+  if (!position) return
+  const lng = position.getLng()
+  const lat = position.getLat()
+  navForm.startCoord = `${lng.toFixed(6)},${lat.toFixed(6)}`
+  navForm.startLocation = result.formattedAddress || `当前位置 (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+  updateUserMarker(lng, lat, result.accuracy)
+}
+
+const updateUserMarker = (lng, lat, accuracy = 50) => {
+  if (!mapInstance) return
+  const position = new window.AMap.LngLat(lng, lat)
+
+  if (!userAccuracy) {
+    userAccuracy = new window.AMap.Circle({
+      center: position,
+      radius: accuracy || 50,
+      fillColor: '#3388ff',
+      fillOpacity: 0.12,
+      strokeColor: '#3388ff',
+      strokeOpacity: 0.3,
+      strokeWeight: 1,
+      zIndex: 100
+    })
+    mapInstance.add(userAccuracy)
+  } else {
+    userAccuracy.setCenter(position)
+    if (accuracy) userAccuracy.setRadius(accuracy)
+  }
+
+  if (!userMarker) {
+    userMarker = new window.AMap.CircleMarker({
+      center: position,
+      radius: 7,
+      fillColor: '#3388ff',
+      strokeColor: '#ffffff',
+      strokeWeight: 3,
+      zIndex: 200,
+      cursor: 'pointer'
+    })
+    mapInstance.add(userMarker)
+  } else {
+    userMarker.setCenter(position)
+  }
+}
+
 const getLocation = () => {
+  if (!window.AMap || !mapInstance) {
+    ElMessage.error('地图尚未加载完成，请稍后再试')
+    return
+  }
+
+  locating.value = true
+  if (geolocation) {
+    // 优先使用高德定位组件（国内可用，支持 IP 兜底）
+    geolocation.getCurrentPosition((status, result) => {
+      locating.value = false
+      if (status === 'complete') {
+        applyGeoResult(result)
+        if (mapInstance) mapInstance.setCenter(result.position || result.location)
+        ElMessage.success('已获取当前位置')
+      } else {
+        ElMessage.error('定位失败，请检查网络或手动输入地址')
+      }
+    })
+    return
+  }
+
+  // 兜底：浏览器原生定位
   if (!navigator.geolocation) {
+    locating.value = false
     ElMessage.error('浏览器不支持定位')
     return
   }
-  
-  locating.value = true
   navigator.geolocation.getCurrentPosition(
-    async (pos) => {
-      navForm.startCoord = `${pos.coords.longitude.toFixed(6)},${pos.coords.latitude.toFixed(6)}`
-      navForm.startLocation = `当前位置 (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`
+    (pos) => {
       locating.value = false
+      const lng = pos.coords.longitude
+      const lat = pos.coords.latitude
+      navForm.startCoord = `${lng.toFixed(6)},${lat.toFixed(6)}`
+      navForm.startLocation = `当前位置 (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+      updateUserMarker(lng, lat, pos.coords.accuracy)
+      if (mapInstance) mapInstance.setCenter([lng, lat])
       ElMessage.success('已获取当前位置')
     },
     async () => {
@@ -825,17 +948,114 @@ const getLocation = () => {
   )
 }
 
-const planRoute = async () => {
+const onTrackUpdate = (result) => {
+  const position = result.position || result.location
+  if (!position) return
+  const lng = position.getLng()
+  const lat = position.getLat()
+  navForm.startCoord = `${lng.toFixed(6)},${lat.toFixed(6)}`
+  trackingFailed.value = false
+  trackingStatus.value = `已定位 (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+  updateUserMarker(lng, lat, result.accuracy)
+
+  // 跟随模式：地图中心始终对准当前位置
+  if (followMode.value && mapInstance) {
+    mapInstance.setCenter(position)
+  }
+
+  // 偏离原路线时自动重新规划，实现“走到哪路线追到哪”
+  maybeReplan(lng, lat)
+}
+
+const startTracking = () => {
+  if (!geolocation) {
+    ElMessage.warning('定位组件未就绪，请稍后再试')
+    return
+  }
+  tracking.value = true
+  trackingFailed.value = false
+  trackingStatus.value = '正在定位...'
+  trackStarted = true
+
+  try {
+    // 高德 watchPosition 持续追踪
+    geolocation.watchPosition((status, result) => {
+      if (status === 'complete') {
+        onTrackUpdate(result)
+      } else {
+        trackingFailed.value = true
+        trackingStatus.value = '定位失败，正在重试...'
+      }
+    })
+  } catch (e) {
+    // 原生 watchPosition 不可用时，退化为定时轮询
+    watchTimer = setInterval(() => {
+      geolocation.getCurrentPosition((status, result) => {
+        if (status === 'complete') onTrackUpdate(result)
+      })
+    }, 5000)
+  }
+}
+
+const stopTracking = () => {
+  tracking.value = false
+  trackingStatus.value = ''
+  trackingFailed.value = false
+  if (geolocation && geolocation.clearWatch) {
+    try { geolocation.clearWatch() } catch (e) { /* 忽略 */ }
+  }
+  if (watchTimer) {
+    clearInterval(watchTimer)
+    watchTimer = null
+  }
+  if (userMarker && mapInstance) mapInstance.remove(userMarker)
+  if (userAccuracy && mapInstance) mapInstance.remove(userAccuracy)
+  userMarker = null
+  userAccuracy = null
+}
+
+const toggleTracking = () => {
+  if (tracking.value) {
+    stopTracking()
+  } else {
+    startTracking()
+  }
+}
+
+const distanceToRouteLine = (lng, lat) => {
+  if (!routeResult.value || !routeResult.value.polyline) return 0
+  const points = routeResult.value.polyline.split(';').map(p => {
+    const [x, y] = p.split(',').map(Number)
+    return [x, y]
+  })
+  let min = Infinity
+  for (const [x, y] of points) {
+    const d = Math.sqrt((lng - x) ** 2 + (lat - y) ** 2)
+    if (d < min) min = d
+  }
+  return min * 111320
+}
+
+const maybeReplan = (lng, lat) => {
+  if (!routeResult.value || !routeResult.value.polyline) return
+  const now = Date.now()
+  if (now - lastReplanTime < 10000) return
+  if (distanceToRouteLine(lng, lat) < 40) return
+  lastReplanTime = now
+  planRoute(true)
+}
+
+const planRoute = async (silent = false) => {
   if (!navForm.startCoord && !navForm.startLocation) {
-    ElMessage.warning('请输入或获取出发地')
+    if (!silent) ElMessage.warning('请输入或获取出发地')
     return
   }
   if (!navForm.destCoord) {
-    ElMessage.warning('请选择目的地活动')
+    if (!silent) ElMessage.warning('请选择目的地活动')
     return
   }
   
-  planningRoute.value = true
+  planningRoute.value = !silent
   
   try {
     let origin = navForm.startCoord
@@ -847,16 +1067,20 @@ const planRoute = async () => {
     const res = await navigationAPI.planRoute(origin, navForm.destCoord, navForm.mode)
     routeResult.value = res.data
     
-    drawRouteOnMap(res.data)
-    ElMessage.success('路线规划成功')
+    drawRouteOnMap(res.data, silent)
+    if (!silent) {
+      ElMessage.success('路线规划成功')
+      // 规划成功后自动开启实时追踪
+      if (!tracking.value && geolocation) startTracking()
+    }
   } catch (error) {
-    ElMessage.error('路线规划失败：' + (error.response?.data?.detail || '未知错误'))
+    if (!silent) ElMessage.error('路线规划失败：' + (error.response?.data?.detail || '未知错误'))
   } finally {
     planningRoute.value = false
   }
 }
 
-const drawRouteOnMap = (routeData) => {
+const drawRouteOnMap = (routeData, noFit = false) => {
   if (!window.AMap || !mapInstance) return
   
   if (window.routeLine) {
@@ -875,7 +1099,7 @@ const drawRouteOnMap = (routeData) => {
       strokeOpacity: 0.8
     })
     mapInstance.add(window.routeLine)
-    mapInstance.setFitView([window.routeLine])
+    if (!noFit) mapInstance.setFitView([window.routeLine])
   }
 }
 
@@ -1585,6 +1809,54 @@ const drawRouteOnMap = (routeData) => {
 
 .mode-btn span:first-child {
   font-size: 22px;
+}
+
+.tracking-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.follow-toggle {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #666;
+  white-space: nowrap;
+}
+
+.tracking-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #3388ff;
+  padding: 8px 12px;
+  background: #f0f7ff;
+  border-radius: 10px;
+}
+
+.tracking-status.error {
+  color: #e54d42;
+  background: #fff1f0;
+}
+
+.tracking-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3388ff;
+  animation: tracking-pulse 1.2s infinite;
+  flex-shrink: 0;
+}
+
+@keyframes tracking-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(51, 136, 255, 0.5); }
+  70% { box-shadow: 0 0 0 6px rgba(51, 136, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(51, 136, 255, 0); }
 }
 
 .route-result {
