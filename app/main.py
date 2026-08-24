@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 # 导入自己的模块
-from app.database.config import get_db
+from database.config import get_db
 from app.api import auth, activities, navigation, chat, sub_activities, tags, upload
 
 # 创建 FastAPI 应用
@@ -24,7 +24,12 @@ app = FastAPI(
 # 配置CORS（跨域资源共享）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境要指定具体域名
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],  # 允许所有HTTP方法
     allow_headers=["*"],  # 允许所有HTTP头

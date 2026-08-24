@@ -80,7 +80,7 @@
           >
             <div class="message-content">
               <div class="message-label">🤖 助手</div>
-              <div class="message-text" v-html="msg.content"></div>
+              <div class="message-text" v-html="sanitizeHtml(msg.content)"></div>
             </div>
           </div>
           <div v-if="loading" class="message assistant">
@@ -440,10 +440,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { authAPI, activityAPI, chatAPI, navigationAPI } from '@/api'
+import { sanitizeHtml } from '@/utils/sanitize'
 
 const userStore = useUserStore()
 
@@ -468,10 +469,19 @@ const updateDateTime = () => {
   currentTime.value = `${days[now.getDay()]} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
 }
 
+let dateTimer = null
+
 onMounted(() => {
   updateDateTime()
-  setInterval(updateDateTime, 1000)
+  dateTimer = setInterval(updateDateTime, 1000)
   loadNavActivities()
+})
+
+onUnmounted(() => {
+  if (dateTimer) {
+    clearInterval(dateTimer)
+    dateTimer = null
+  }
 })
 
 // 切换页面
@@ -612,11 +622,25 @@ const handleRegister = async () => {
 
   registerLoading.value = true
   try {
-    await authAPI.register(registerForm)
-    ElMessage.success('注册成功，请登录')
-    // 切换回登录模式并自动填入账号密码
-    loginForm.username = registerForm.username
-    loginForm.password = registerForm.password
+    const registerData = {
+      username: registerForm.username,
+      password: registerForm.password,
+      organizer_name: registerForm.organizer_name,
+      contact_person: registerForm.contact_person,
+      phone: registerForm.phone,
+      email: registerForm.email,
+      address: registerForm.address,
+    }
+    await authAPI.register(registerData)
+    // 注册成功后直接调用登录 API，避免密码在多个对象间传递
+    const res = await authAPI.login({
+      username: registerData.username,
+      password: registerData.password,
+    })
+    userStore.setToken(res.data.access_token)
+    userStore.setUserInfo(res.data.user_info)
+    ElMessage.success('注册成功，已自动登录')
+    Object.keys(registerForm).forEach((key) => (registerForm[key] = ''))
     showRegister.value = false
   } catch (error) {
     registerError.value = error.response?.data?.detail || '注册失败'
@@ -730,6 +754,7 @@ const navForm = reactive({
   destName: '',
   destination: '',
   destCoord: '',
+  destCity: '',
   startLocation: '',
   startCoord: '',
   mode: 'driving'
@@ -777,6 +802,7 @@ const onActivitySelect = async (activityId) => {
     try {
       const res = await navigationAPI.geocode(activity.address)
       navForm.destCoord = res.data.location
+      navForm.destCity = res.data.city || res.data.province || ''
       showMarkerOnMap(res.data.location, activity.activity_name)
     } catch (error) {
       ElMessage.error('地址解析失败')
@@ -1064,7 +1090,7 @@ const planRoute = async (silent = false) => {
       origin = geoRes.data.location
     }
     
-    const res = await navigationAPI.planRoute(origin, navForm.destCoord, navForm.mode)
+    const res = await navigationAPI.planRoute(origin, navForm.destCoord, navForm.mode, navForm.destCity || undefined)
     routeResult.value = res.data
     
     drawRouteOnMap(res.data, silent)
@@ -1087,19 +1113,32 @@ const drawRouteOnMap = (routeData, noFit = false) => {
     mapInstance.remove(window.routeLine)
   }
   
-  if (routeData.polyline) {
-    const path = routeData.polyline.split(';').map(p => {
-      const [lng, lat] = p.split(',')
-      return [parseFloat(lng), parseFloat(lat)]
-    })
-    window.routeLine = new window.AMap.Polyline({
-      path: path,
-      strokeColor: '#667eea',
-      strokeWeight: 6,
-      strokeOpacity: 0.8
-    })
-    mapInstance.add(window.routeLine)
-    if (!noFit) mapInstance.setFitView([window.routeLine])
+  if (routeData && routeData.polyline) {
+    try {
+      const path = routeData.polyline
+        .split(';')
+        .map((p) => {
+          if (!p || !p.includes(',')) return null
+          const [lng, lat] = p.split(',')
+          const x = parseFloat(lng)
+          const y = parseFloat(lat)
+          if (isNaN(x) || isNaN(y)) return null
+          return [x, y]
+        })
+        .filter(Boolean)
+      if (path.length > 0) {
+        window.routeLine = new window.AMap.Polyline({
+          path: path,
+          strokeColor: '#667eea',
+          strokeWeight: 6,
+          strokeOpacity: 0.8
+        })
+        mapInstance.add(window.routeLine)
+        if (!noFit) mapInstance.setFitView([window.routeLine])
+      }
+    } catch (e) {
+      console.warn('路线绘制失败', e)
+    }
   }
 }
 

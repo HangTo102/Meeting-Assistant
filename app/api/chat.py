@@ -3,8 +3,10 @@ AI 对话 API
 支持 session 上下文记忆，连续对话沿用已锁定的活动。
 """
 import uuid
+import time
+from collections import defaultdict
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime
@@ -15,6 +17,27 @@ from app.services.ai_service import generate_ai_response
 
 
 router = APIRouter()
+
+# ========== 简单频率限制（内存版） ==========
+# ip -> [最近请求时间戳]
+_RATE_LIMIT_WINDOW = 60        # 时间窗口：60 秒
+_RATE_LIMIT_MAX = 30           # 每窗口最多 30 次请求
+_rate_limit_store = defaultdict(list)
+
+
+def _check_rate_limit(client_ip: str):
+    """检查并记录频率限制，超限抛出 429"""
+    now = time.time()
+    window_start = now - _RATE_LIMIT_WINDOW
+    _rate_limit_store[client_ip] = [
+        ts for ts in _rate_limit_store[client_ip] if ts > window_start
+    ]
+    if len(_rate_limit_store[client_ip]) >= _RATE_LIMIT_MAX:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="请求过于频繁，请稍后再试",
+        )
+    _rate_limit_store[client_ip].append(now)
 
 
 class ChatRequest(BaseModel):
@@ -36,9 +59,13 @@ class ChatHistoryResponse(BaseModel):
 
 
 @router.post("/", response_model=ChatResponse)
-async def chat(request: ChatRequest, db: Session = Depends(get_db)):
+async def chat(request: ChatRequest, http_request: Request, db: Session = Depends(get_db)):
     """与 AI 助手对话（支持上下文记忆）"""
     
+    # 频率限制
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    _check_rate_limit(client_ip)
+
     session_id = request.session_id or str(uuid.uuid4())
 
     try:
@@ -59,14 +86,17 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
             activity_name = act.activity_name
 
     # 保存对话记录
-    chat_log = ChatLog(
-        session_id=session_id,
-        activity_id=request.activity_id,
-        user_message=request.message,
-        assistant_response=ai_response,
-    )
-    db.add(chat_log)
-    db.commit()
+    try:
+        chat_log = ChatLog(
+            session_id=session_id,
+            activity_id=request.activity_id,
+            user_message=request.message,
+            assistant_response=ai_response,
+        )
+        db.add(chat_log)
+        db.commit()
+    except Exception:
+        db.rollback()
 
     return ChatResponse(
         response=ai_response,

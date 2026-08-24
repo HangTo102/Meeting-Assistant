@@ -118,7 +118,7 @@ def update_sub_activity(
     
     # 检查权限
     activity = db.query(Activity).filter(Activity.id == sub_activity.activity_id).first()
-    if activity.organizer_id != current_user.id:
+    if not activity or activity.organizer_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="无权修改此子活动"
@@ -155,7 +155,7 @@ def delete_sub_activity(
     
     # 检查权限
     activity = db.query(Activity).filter(Activity.id == sub_activity.activity_id).first()
-    if activity.organizer_id != current_user.id:
+    if not activity or activity.organizer_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="无权删除此子活动"

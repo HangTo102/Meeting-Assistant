@@ -62,19 +62,28 @@ async def upload_file(
     file_path = upload_dir / unique_filename
     
     try:
-        content = await file.read()
-        
-        # 检查文件大小
-        if len(content) > settings.MAX_UPLOAD_SIZE:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"文件过大，最大支持 {settings.MAX_UPLOAD_SIZE // 1024 // 1024}MB"
-            )
-        
+        # 分块读取并检查文件大小，避免大文件一次性载入内存
+        total_size = 0
         with open(file_path, "wb") as f:
-            f.write(content)
+            while True:
+                chunk = await file.read(1024 * 1024)  # 每次读 1MB
+                if not chunk:
+                    break
+                total_size += len(chunk)
+                if total_size > settings.MAX_UPLOAD_SIZE:
+                    f.close()
+                    os.remove(file_path)
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=f"文件过大，最大支持 {settings.MAX_UPLOAD_SIZE // 1024 // 1024}MB"
+                    )
+                f.write(chunk)
         
+    except HTTPException:
+        raise
     except Exception as e:
+        if file_path.exists():
+            os.remove(file_path)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"上传失败：{str(e)}"
@@ -94,12 +103,12 @@ async def upload_file(
                 detail="无权为此活动上传文件"
             )
     
-    # 保存数据库记录
+    # 保存数据库记录（未关联活动时 activity_id 置为 NULL）
     attachment = ActivityAttachment(
-        activity_id=activity_id or 0,
+        activity_id=activity_id,
         file_name=file.filename,
         file_path=str(file_path),
-        file_size=len(content),
+        file_size=total_size,
         file_type=file.content_type or "application/octet-stream",
         uploaded_by=current_user.id
     )
@@ -112,7 +121,7 @@ async def upload_file(
         file_id=attachment.id,
         file_name=file.filename,
         file_url=f"/static/uploads/{unique_filename}",
-        file_size=len(content),
+        file_size=total_size,
         file_type=file.content_type or "application/octet-stream"
     )
 

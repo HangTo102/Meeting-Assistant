@@ -11,8 +11,26 @@ from database.models import Organizer
 from app.core.security import decode_access_token
 
 
+class _HTTPBearer401(HTTPBearer):
+    """HTTPBearer 定制版：无 token 时返回 401 而不是 403"""
+
+    def __init__(self):
+        super().__init__(auto_error=True)
+
+    async def __call__(self, request):
+        from fastapi import Request
+        credentials = await super().__call__(request)
+        if credentials is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="未提供认证令牌",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return credentials
+
+
 # HTTP Bearer Token 认证
-security = HTTPBearer()
+security = _HTTPBearer401()
 
 
 def get_db() -> Generator:

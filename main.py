@@ -1,11 +1,16 @@
 """
 会场精灵 - FastAPI 主入口
 """
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
+
+# 确保 static 目录存在，避免启动崩溃
+STATIC_DIR = "static"
+os.makedirs(os.path.join(STATIC_DIR, "uploads"), exist_ok=True)
 
 # 导入 API 路由
 from app.api import auth, activities, sub_activities, tags, chat, upload, navigation
@@ -30,7 +35,7 @@ app.add_middleware(
 )
 
 # 挂载静态文件目录（用于上传的文件访问）
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # 注册 API 路由
 app.include_router(auth.router, prefix="/api/auth", tags=["认证"])

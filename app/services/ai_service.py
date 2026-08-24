@@ -12,6 +12,7 @@
 
 import os
 import json
+import time
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from database.models import Activity, SubActivity, Organizer
@@ -29,14 +30,35 @@ from app.services.retriever import (
 # 会话状态管理（内存中维护上下文）
 # ============================================
 
-# session_id → {"current_activity": dict, "activity_id": int}
+# session_id → {"current_activity": dict, "activity_id": int, "last_access": float}
 SESSION_CONTEXT = {}
+
+# 会话过期时间（秒）：超过 1 小时未活动的会话自动清理
+SESSION_TTL = 3600
+
+
+def _purge_expired_sessions():
+    """清理过期的会话上下文，防止内存无限增长"""
+    now = time.time()
+    expired = [
+        sid for sid, ctx in SESSION_CONTEXT.items()
+        if now - ctx.get("last_access", 0) > SESSION_TTL
+    ]
+    for sid in expired:
+        del SESSION_CONTEXT[sid]
 
 
 def get_session_context(session_id: str) -> dict:
     """获取会话上下文"""
+    _purge_expired_sessions()
     if session_id not in SESSION_CONTEXT:
-        SESSION_CONTEXT[session_id] = {"current_activity": None, "activity_id": None}
+        SESSION_CONTEXT[session_id] = {
+            "current_activity": None,
+            "activity_id": None,
+            "last_access": time.time(),
+        }
+    else:
+        SESSION_CONTEXT[session_id]["last_access"] = time.time()
     return SESSION_CONTEXT[session_id]
 
 

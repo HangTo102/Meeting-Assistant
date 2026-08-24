@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime, Boolean, ForeignKey, Index, UniqueConstraint
 )
 from sqlalchemy.orm import declarative_base, relationship, Session
+from sqlalchemy.pool import NullPool
 from sqlalchemy.sql import func
 
 Base = declarative_base()
@@ -240,36 +241,6 @@ class DatabaseManager:
 
 # 便捷函数
 def get_db_session(database_url: str) -> Session:
-    """获取数据库会话的便捷函数"""
-    engine = create_engine(database_url)
+    """获取数据库会话的便捷函数（一次性使用，用完需手动 close）"""
+    engine = create_engine(database_url, poolclass=NullPool)
     return Session(bind=engine)
-
-
-# ============================================
-# 使用示例
-# ============================================
-
-if __name__ == "__main__":
-    # 示例：本地测试
-    DATABASE_URL = "mysql+pymysql://user:YOUR_PASSWORD@localhost:3306/event_assistant?charset=utf8mb4"
-    
-    # 创建管理器
-    db = DatabaseManager(DATABASE_URL)
-    
-    # 创建表
-    db.create_tables()
-    print("✅ 数据库表创建成功！")
-    
-    # 示例：创建主办方
-    with db.get_session() as session:
-        organizer = Organizer(
-            username="master",
-            password_hash="$2a$10$...",  # BCrypt 哈希
-            organizer_name="测试主办方",
-            contact_person="管理员",
-            phone="13800138000",
-            email="admin@example.com"
-        )
-        session.add(organizer)
-        session.commit()
-        print(f"✅ 创建主办方: {organizer}")

@@ -16,6 +16,7 @@ async def plan_route(
     origin: str = Query(..., description="起点坐标，格式：经度,纬度"),
     destination: str = Query(..., description="终点坐标，格式：经度,纬度"),
     mode: str = Query("driving", description="出行方式：driving/transit/walking"),
+    city: Optional[str] = Query("上海", description="公交规划所在城市，如：上海/北京"),
 ):
     """调用高德地图路线规划 API"""
     
@@ -38,7 +39,7 @@ async def plan_route(
     }
     
     if mode == "transit":
-        params["city"] = "上海"
+        params["city"] = city or "上海"
     
     async with httpx.AsyncClient(timeout=10) as client:
         response = await client.get(api_url, params=params)
@@ -61,7 +62,7 @@ def parse_route_result(data: dict, mode: str) -> dict:
     }
     
     if mode == "driving":
-        route = data.get("route", {})
+        route = data.get("route") or {}
         path = route.get("paths", [{}])[0]
         result["distance"] = int(path.get("distance", 0))
         result["duration"] = int(path.get("duration", 0))
@@ -86,19 +87,22 @@ def parse_route_result(data: dict, mode: str) -> dict:
             result["distance"] = int(transit.get("distance", 0))
             result["duration"] = int(transit.get("duration", 0))
             result["cost"] = transit.get("cost", {})
-            result["steps"] = [
-                {
-                    "type": segment.get("bus", {}).get("buslines", [{}])[0].get("type", ""),
-                    "name": segment.get("bus", {}).get("buslines", [{}])[0].get("name", ""),
-                    "departure_stop": segment.get("bus", {}).get("buslines", [{}])[0].get("departure_stop", {}).get("name", ""),
-                    "arrival_stop": segment.get("bus", {}).get("buslines", [{}])[0].get("arrival_stop", {}).get("name", ""),
-                }
-                for segment in transit.get("segments", [])
-                if segment.get("bus")
-            ]
+            steps = []
+            for segment in transit.get("segments") or []:
+                buslines = (segment.get("bus") or {}).get("buslines") or []
+                if not buslines:
+                    continue
+                busline = buslines[0]
+                steps.append({
+                    "type": busline.get("type", ""),
+                    "name": busline.get("name", ""),
+                    "departure_stop": busline.get("departure_stop", {}).get("name", ""),
+                    "arrival_stop": busline.get("arrival_stop", {}).get("name", ""),
+                })
+            result["steps"] = steps
     
     elif mode == "walking":
-        route = data.get("route", {})
+        route = data.get("route") or {}
         path = route.get("paths", [{}])[0]
         result["distance"] = int(path.get("distance", 0))
         result["duration"] = int(path.get("duration", 0))

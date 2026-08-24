@@ -26,7 +26,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   response => response,
   error => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && window.location.pathname !== '/login') {
       localStorage.removeItem('token')
       window.location.href = '/login'
     }
@@ -93,8 +93,8 @@ export const uploadAPI = {
 
 // ========== 地图导航 API ==========
 export const navigationAPI = {
-  planRoute: (origin, destination, mode) => 
-    api.get('/navigation/route', { params: { origin, destination, mode } }),
+  planRoute: (origin, destination, mode, city) => 
+    api.get('/navigation/route', { params: { origin, destination, mode, city } }),
   geocode: (address) => 
     api.get('/navigation/geocode', { params: { address } }),
 }

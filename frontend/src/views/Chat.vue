@@ -21,7 +21,7 @@
           </div>
           <div class="message-content">
             <div class="message-label">{{ msg.type === 'user' ? '你' : 'AI 助手' }}</div>
-            <div class="message-text" v-html="msg.content"></div>
+            <div class="message-text" v-html="sanitizeHtml(msg.content)"></div>
           </div>
         </div>
         <div v-if="loading" class="message assistant">
@@ -67,6 +67,7 @@ import { ref, reactive, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { chatAPI, activityAPI } from '@/api'
 import { Promotion } from '@element-plus/icons-vue'
+import { sanitizeHtml } from '@/utils/sanitize'
 
 const messages = ref([])
 const inputMessage = ref('')

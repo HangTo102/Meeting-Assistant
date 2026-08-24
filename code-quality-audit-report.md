@@ -39,6 +39,7 @@
 - **严重性**: 🔴 严重
 - **描述**: AI 返回的 `msg.content` 直接通过 `v-html` 渲染，未经任何 HTML 消毒。如果 AI 返回包含 `<script>` 或恶意标签，就会被浏览器直接执行。这是整个项目最严重的安全隐患。
 - **修复建议**: 使用 `v-text` 代替 `v-html`，或引入 [DOMPurify](https://github.com/cure53/DOMPurify) 对 HTML 进行消毒后再渲染。
+- **状态**: ✅ **已修复（2026-08-24 复核）** — 两处 `v-html` 均改用 `sanitizeHtml()`（`frontend/src/utils/sanitize.js`），转义全部标签，仅保留 `<br>` 换行。
 
 ### C2. CORS 全开
 
@@ -46,6 +47,7 @@
 - **严重性**: 🔴 严重
 - **描述**: `allow_origins=["*"]` 允许任何域名跨域调用 API。生产环境必须限制为实际部署域名。
 - **修复建议**: 将 `["*"]` 替换为实际的前端部署域名列表。
+- **状态**: ✅ **已修复（2026-08-24 复核）** — `main.py` 改用 `settings.ALLOWED_ORIGINS` 白名单。⚠️ 生产域名尚未加入 `config.py`，部署时需补充。
 
 ### C3. 会话状态内存泄漏
 
@@ -53,6 +55,7 @@
 - **严重性**: 🔴 严重
 - **描述**: `SESSION_CONTEXT = {}` 是纯内存字典，永久不清除（`clear_session` 函数存在但从未被调用）。长时间运行后无限膨胀，最终导致 OOM 崩溃。
 - **修复建议**: 添加 TTL 过期清理机制（如每 30 分钟清理超过 1 小时未活动的 session）。
+- **状态**: ✅ **已修复（2026-08-24 复核）** — `ai_service.py` 新增 `_purge_expired_sessions()` + `SESSION_TTL = 3600`，在 `get_session_context()` 每次调用时清理过期会话。
 
 ---
 
@@ -75,6 +78,7 @@
 - **位置**: [security.py:30](file:///e:/program_code/会场精灵v2/app/core/security.py#L30)
 - **描述**: `datetime.utcnow()` 在 Python 3.12+ 中已弃用，建议改为 `datetime.now(timezone.utc)`。
 - **修复建议**: `from datetime import timezone` + `datetime.now(timezone.utc).replace(tzinfo=None)`
+- **状态**: ✅ **已修复（2026-08-24 复核）** — `security.py` 改用 `datetime.now(timezone.utc)`。
 
 ### H4. MainApp.vue 巨型组件（1500+ 行）
 
@@ -85,6 +89,7 @@
   - `LoginRegister.vue`
   - `ActivityUpload.vue`
   - `NavigationMap.vue`
+- **状态**: ❌ **未修复**（现约 1950 行，需大重构）
 
 ### H5. `v-show` vs `v-if` 地图容器
 
@@ -97,36 +102,38 @@
 - **位置**: [MainApp.vue:598](file:///e:/program_code/会场精灵v2/frontend/src/views/MainApp.vue#L598)
 - **描述**: `loginForm.password = registerForm.password` 注册成功后自动登录，密码在前端 JS 对象间传递，违反最小暴露原则。
 - **修复建议**: 注册成功后直接调用登录 API，不应复用密码对象。
+- **状态**: ✅ **已修复（2026-08-24 复核）** — `MainApp.vue` 注册成功后直接调用 `authAPI.login()` 并清空表单。⚠️ `Login.vue:117` 仍保留旧写法（次要页面）。
 
 ### H7. Chat API 无认证
 
 - **位置**: [chat.py:38](file:///e:/program_code/会场精灵v2/app/api/chat.py#L38)
 - **描述**: `/chat` 接口完全无认证，任何人可无限调用，消耗 AI API 额度和服务器资源。
 - **修复建议**: 添加频率限制（rate limit）或可选的 token 认证。
+- **状态**: ✅ **已修复（2026-08-24 复核）** — `chat.py` 新增内存版 IP 频率限制（60 秒窗口内最多 30 次，超限返回 429）。
 
 ---
 
 ## 5. 🟡 Medium — 建议优化
 
-| # | 问题 | 位置 | 说明 | 建议 |
-|---|------|------|------|------|
-| M1 | Token 存 localStorage | [stores/user.js:10](file:///e:/program_code/会场精灵v2/frontend/src/stores/user.js#L10) | localStorage 可被 XSS 攻击窃取 | 结合 httpOnly Cookie 使用，或确保 C1 修复后风险可控 |
-| M2 | 数据库 import 路径混乱 | [auth.py:8](file:///e:/program_code/会场精灵v2/app/api/auth.py#L8) vs [dependencies.py:9](file:///e:/program_code/会场精灵v2/app/core/dependencies.py#L9) | `database.config` vs `app.database.config` 两套路径混用 | 统一为 `app.database.config` |
-| M3 | 地图 polyline 解析容错性 | [MainApp.vue:868](file:///e:/program_code/会场精灵v2/frontend/src/views/MainApp.vue#L868) | 坐标解析无空值保护，某个 segment polyline 为空时可能报错 | 添加 `filter(Boolean)` 和 try-catch |
-| M4 | 401 vs 403 状态码 | [dependencies.py:11](file:///e:/program_code/会场精灵v2/app/core/dependencies.py#L11) | `HTTPBearer()` 在无 token 时默认返回 403 | 添加自定义异常处理器统一返回 401 |
-| M5 | 测试代码含占位密码 | [database/models.py:260](file:///e:/program_code/会场精灵v2/database/models.py#L260) | `__main__` 示例代码中含有 `YOUR_PASSWORD` 等占位符 | 移除或条件编译 `__main__` 代码块 |
-| M6 | 无 lint / typecheck 工具 | 项目全局 | 前端无 ESLint，后端无 ruff/mypy，零质量门控 | 添加 ESLint + ruff 配置和 CI 流程 |
+| # | 问题 | 位置 | 说明 | 建议 | 状态 |
+|---|------|------|------|------|------|
+| M1 | Token 存 localStorage | [stores/user.js:10](file:///e:/program_code/会场精灵v2/frontend/src/stores/user.js#L10) | localStorage 可被 XSS 攻击窃取 | 结合 httpOnly Cookie 使用，或确保 C1 修复后风险可控 | ⚠️ 未改（C1 已修复，风险可控） |
+| M2 | 数据库 import 路径混乱 | [auth.py:8](file:///e:/program_code/会场精灵v2/app/api/auth.py#L8) vs [dependencies.py:9](file:///e:/program_code/会场精灵v2/app/core/dependencies.py#L9) | `database.config` vs `app.database.config` 两套路径混用 | 统一为 `app.database.config` | ✅ 已修复（统一为 `database.*`） |
+| M3 | 地图 polyline 解析容错性 | [MainApp.vue:868](file:///e:/program_code/会场精灵v2/frontend/src/views/MainApp.vue#L868) | 坐标解析无空值保护，某个 segment polyline 为空时可能报错 | 添加 `filter(Boolean)` 和 try-catch | ✅ 已修复（后端 join 前过滤空段，前端有空值守卫） |
+| M4 | 401 vs 403 状态码 | [dependencies.py:11](file:///e:/program_code/会场精灵v2/app/core/dependencies.py#L11) | `HTTPBearer()` 在无 token 时默认返回 403 | 添加自定义异常处理器统一返回 401 | ✅ 已修复（自定义 `_HTTPBearer401`） |
+| M5 | 测试代码含占位密码 | [database/models.py:260](file:///e:/program_code/会场精灵v2/database/models.py#L260) | `__main__` 示例代码中含有 `YOUR_PASSWORD` 等占位符 | 移除或条件编译 `__main__` 代码块 | ✅ 已修复（models.py 已无 `__main__`/占位密码） |
+| M6 | 无 lint / typecheck 工具 | 项目全局 | 前端无 ESLint，后端无 ruff/mypy，零质量门控 | 添加 ESLint + ruff 配置和 CI 流程 | ❌ 未修复 |
 
 ---
 
 ## 6. 🟢 Low — 可改进项
 
-| # | 问题 | 位置 | 说明 |
-|---|------|------|------|
-| L1 | 上传目录被 git 跟踪 | [static/uploads/.gitkeep](file:///e:/program_code/会场精灵v2/static/uploads/.gitkeep) | 用户上传的文件可能意外提交 |
-| L2 | 内联 style 与 scoped CSS 混用 | [MainApp.vue](file:///e:/program_code/会场精灵v2/frontend/src/views/MainApp.vue) | 大量 `style="margin-bottom: 10px"` 不便统一管理 |
-| L3 | 硬编码城市列表 | [retriever.py](file:///e:/program_code/会场精灵v2/app/services/retriever.py) | 仅 8 个城市，无法覆盖全国活动 |
-| L4 | 导航硬编码城市为上海 | [navigation.py:37](file:///e:/program_code/会场精灵v2/app/api/navigation.py#L37) | 公交路线规划 `params["city"] = "上海"`，其他城市无法使用公交导航 |
+| # | 问题 | 位置 | 说明 | 状态 |
+|---|------|------|------|------|
+| L1 | 上传目录被 git 跟踪 | [static/uploads/.gitkeep](file:///e:/program_code/会场精灵v2/static/uploads/.gitkeep) | 用户上传的文件可能意外提交 | ✅ 已修复（.gitignore 排除 `static/uploads/*`） |
+| L2 | 内联 style 与 scoped CSS 混用 | [MainApp.vue](file:///e:/program_code/会场精灵v2/frontend/src/views/MainApp.vue) | 大量 `style="margin-bottom: 10px"` 不便统一管理 | ⚠️ 未改（低优先级，纯样式） |
+| L3 | 硬编码城市列表 | [retriever.py](file:///e:/program_code/会场精灵v2/app/services/retriever.py) | 仅 8 个城市，无法覆盖全国活动 | ⚠️ 未改 |
+| L4 | 导航硬编码城市为上海 | [navigation.py:37](file:///e:/program_code/会场精灵v2/app/api/navigation.py#L37) | 公交路线规划 `params["city"] = "上海"`，其他城市无法使用公交导航 | ✅ 已修复（2026-08-24）— `city` 改为查询参数，前端选目的地时从地理编码结果自动取城市并传入 |
 
 ---
 
@@ -203,6 +210,18 @@ Priority 3 (本月内)
 | ✅ initMap 时序优化 | [MainApp.vue:775](file:///e:/program_code/会场精灵v2/frontend/src/views/MainApp.vue#L775) | 增加 `__amapReady` 标记检测防遗漏，防重复初始化 |
 | ✅ 地图容器高度修复 | [MainApp.vue:1480](file:///e:/program_code/会场精灵v2/frontend/src/views/MainApp.vue#L1480) | 添加 `min-height: 400px` 防止高度塌陷 |
 | ✅ 注册缺失路由 | [main.py](file:///e:/program_code/会场精灵v2/app/main.py) | 注册 navigation/chat/sub_activities/tags/upload 路由 |
+
+---
+
+## 11. 二次复核记录（2026-08-24）
+
+> 依据本报告逐项复核当前代码，结论如下：
+
+- **全部修复**：C1、C2、C3、H1、H2、H3、H6、H7、M2、M3、M4、M5、L1、L4
+- **部分修复/接受**：M1（C1 已修复，风险可控）
+- **未修复**：H4（MainApp 巨型组件，需重构）、M6（无 lint/typecheck 工具）、L2（内联样式）、L3（retriever 硬编码城市）
+- **附带修复**：`navigation.py` transit 解析在 `buslines` 为空列表时抛 `IndexError`（步行衔接段），本次已加固
+- **部署提醒**：CORS 白名单（`config.py` 的 `ALLOWED_ORIGINS`）尚未加入生产域名，部署时需补充；高精度定位需在服务器配置 HTTPS。
 
 ---
 

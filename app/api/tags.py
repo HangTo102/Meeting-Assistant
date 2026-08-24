@@ -105,7 +105,7 @@ def delete_tag(
     
     # 检查权限
     activity = db.query(Activity).filter(Activity.id == tag.activity_id).first()
-    if activity.organizer_id != current_user.id:
+    if not activity or activity.organizer_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="无权删除此标签"
