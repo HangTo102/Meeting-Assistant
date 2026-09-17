@@ -8,12 +8,19 @@
 """
 
 import os
+from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 
-# 从 database 目录加载 .env 文件
-load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
+# 优先加载项目根目录 .env；若不存在则回退到 database/.env（兼容旧部署）
+ROOT_DIR = Path(__file__).resolve().parent.parent
+DATABASE_ENV = Path(__file__).resolve().parent / '.env'
+
+if (ROOT_DIR / '.env').exists():
+    load_dotenv(ROOT_DIR / '.env', override=True)
+elif DATABASE_ENV.exists():
+    load_dotenv(DATABASE_ENV, override=True)
 
 # ============================================
 # 数据库连接配置

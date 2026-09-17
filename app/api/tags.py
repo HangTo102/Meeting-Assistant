@@ -32,7 +32,7 @@ class TagResponse(BaseModel):
         from_attributes = True
 
 
-@router.post("/", response_model=TagResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=TagResponse, status_code=status.HTTP_201_CREATED)
 def create_tag(
     request: TagCreate,
     db: Session = Depends(get_db),

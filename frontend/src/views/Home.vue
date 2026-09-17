@@ -3,62 +3,58 @@
     <!-- 顶部导航 -->
     <header class="navbar">
       <div class="logo" @click="$router.push('/home')">🎯 会场精灵</div>
-      <div class="nav-links">
+      <div class="nav-links" :class="{ open: mobileMenuOpen }">
         <el-button text @click="$router.push('/home')">首页</el-button>
         <el-button text @click="$router.push('/activities')">活动列表</el-button>
-        <el-button text @click="$router.push('/chat')">AI 助手</el-button>
+        <el-button text @click="$router.push('/app')">AI 助手</el-button>
         <el-button v-if="!userStore.token" type="primary" @click="$router.push('/login')">主办方登录</el-button>
         <el-button v-else type="danger" @click="handleLogout">退出</el-button>
       </div>
+      <el-button class="mobile-menu-btn" text @click="mobileMenuOpen = !mobileMenuOpen">
+        <el-icon :size="24"><Menu /></el-icon>
+      </el-button>
     </header>
 
     <!-- Hero 区域 -->
     <section class="hero">
       <h1>探索精彩活动</h1>
       <p>汇聚各类精彩活动，AI 智能助手随时为您解答</p>
-      <div class="search-box">
-        <el-input
-          v-model="searchQuery"
-          placeholder="搜索活动名称、地点..."
-          size="large"
-          prefix-icon="Search"
-          clearable
-          style="max-width: 500px"
-        >
-          <template #append>
-            <el-button @click="handleSearch">搜索</el-button>
-          </template>
-        </el-input>
+      <div class="hero-actions">
+        <el-button type="primary" size="large" @click="$router.push('/app')">进入会场</el-button>
+        <el-button size="large" @click="$router.push('/login')">主办方入口</el-button>
       </div>
     </section>
 
-    <!-- 热门活动 -->
+    <!-- 全部公开活动 -->
     <section class="section">
       <div class="container">
-        <h2>📅 近期活动</h2>
-        <el-tabs v-model="statusFilter">
-          <el-tab-pane label="即将开始" name="upcoming"></el-tab-pane>
-          <el-tab-pane label="进行中" name="ongoing"></el-tab-pane>
+        <h2>📅 全部活动</h2>
+        <el-tabs v-model="statusFilter" @tab-change="loadActivities">
+          <el-tab-pane label="全部" name="all" />
+          <el-tab-pane label="即将开始" name="upcoming" />
+          <el-tab-pane label="进行中" name="ongoing" />
+          <el-tab-pane label="已结束" name="ended" />
         </el-tabs>
-        
+
         <el-row :gutter="20">
-          <el-col 
-            v-for="act in filteredActivities" 
-            :key="act.id" 
-            :xs="24" :sm="12" :md="8"
+          <el-col
+            v-for="act in filteredActivities"
+            :key="act.id"
+            :xs="24" :sm="12" :md="8" :lg="6"
             style="margin-bottom: 20px"
           >
-            <el-card shadow="hover" class="activity-card">
+            <el-card shadow="hover" class="activity-card" @click="viewDetail(act.id)">
               <h3>{{ act.activity_name }}</h3>
               <p class="time">{{ formatDate(act.start_time) }} - {{ formatDate(act.end_time) }}</p>
               <p class="address">📍 {{ act.address }}</p>
               <div class="tags">
-                <el-tag size="small" v-for="tag in ['科技', '创新']" :key="tag">{{ tag }}</el-tag>
+                <el-tag size="small" v-for="tag in (act.tag_list || [])" :key="tag">{{ tag }}</el-tag>
               </div>
-              <el-button link type="primary" @click="$router.push('/activities/' + act.id)">查看详情</el-button>
             </el-card>
           </el-col>
         </el-row>
+
+        <div v-if="filteredActivities.length === 0" class="empty">暂无活动</div>
       </div>
     </section>
 
@@ -101,34 +97,46 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { activityAPI } from '@/api'
+import { Menu } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const userStore = useUserStore()
 
-const searchQuery = ref('')
-const statusFilter = ref('upcoming')
+const statusFilter = ref('all')
 const activities = ref([])
+const mobileMenuOpen = ref(false)
 
 const filteredActivities = computed(() => {
-  // 这里可以加过滤逻辑
-  return activities.value.slice(0, 6)
+  const now = new Date()
+  return activities.value.filter(act => {
+    if (statusFilter.value === 'all') return true
+    const start = new Date(act.start_time)
+    const end = new Date(act.end_time)
+    if (statusFilter.value === 'upcoming') return start > now
+    if (statusFilter.value === 'ongoing') return start <= now && end >= now
+    if (statusFilter.value === 'ended') return end < now
+    return true
+  })
 })
 
-const handleSearch = () => {
-  if (searchQuery.value) {
-    router.push({ path: '/activities', query: { q: searchQuery.value } })
-  } else {
-    router.push('/activities')
+const loadActivities = async () => {
+  try {
+    const res = await activityAPI.list({ page: 1, page_size: 100, status: 1 })
+    activities.value = res.data
+  } catch (e) {
+    console.error('加载活动失败', e)
   }
 }
 
+const viewDetail = (id) => router.push(`/activities/${id}`)
+
 const formatDate = (dateStr) => {
   const date = new Date(dateStr)
-  return `${date.getMonth() + 1}/${date.getDate()}`
+  return `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
 const handleLogout = () => {
@@ -136,10 +144,7 @@ const handleLogout = () => {
   location.reload()
 }
 
-// 加载活动数据
-activityAPI.list().then(res => {
-  activities.value = res.data
-}).catch(console.error)
+onMounted(loadActivities)
 </script>
 
 <style scoped>
@@ -156,6 +161,9 @@ activityAPI.list().then(res => {
   justify-content: space-between;
   align-items: center;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
 .logo {
@@ -168,6 +176,11 @@ activityAPI.list().then(res => {
 .nav-links {
   display: flex;
   gap: 10px;
+  align-items: center;
+}
+
+.mobile-menu-btn {
+  display: none;
 }
 
 .hero {
@@ -188,9 +201,10 @@ activityAPI.list().then(res => {
   opacity: 0.9;
 }
 
-.search-box {
+.hero-actions {
   display: flex;
   justify-content: center;
+  gap: 16px;
 }
 
 .section {
@@ -204,6 +218,12 @@ activityAPI.list().then(res => {
 
 .activity-card {
   height: 100%;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.activity-card:hover {
+  transform: translateY(-4px);
 }
 
 .activity-card h3 {
@@ -226,6 +246,19 @@ activityAPI.list().then(res => {
   white-space: nowrap;
 }
 
+.activity-card .tags {
+  margin-top: 10px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.empty {
+  text-align: center;
+  color: #999;
+  padding: 40px 0;
+}
+
 .feature-item {
   text-align: center;
   padding: 40px 20px;
@@ -242,5 +275,48 @@ activityAPI.list().then(res => {
   padding: 30px;
   text-align: center;
   margin-top: auto;
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    padding: 12px 16px;
+  }
+
+  .nav-links {
+    display: none;
+    position: absolute;
+    top: 60px;
+    left: 0;
+    right: 0;
+    background: white;
+    flex-direction: column;
+    padding: 16px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  }
+
+  .nav-links.open {
+    display: flex;
+  }
+
+  .mobile-menu-btn {
+    display: inline-flex;
+  }
+
+  .hero {
+    padding: 60px 20px;
+  }
+
+  .hero h1 {
+    font-size: 32px;
+  }
+
+  .hero-actions {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .section {
+    padding: 40px 16px;
+  }
 }
 </style>

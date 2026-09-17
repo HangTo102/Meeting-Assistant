@@ -34,7 +34,7 @@ def validate_file_extension(filename: str) -> bool:
     return ext in settings.ALLOWED_EXTENSIONS
 
 
-@router.post("/", response_model=UploadResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=UploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_file(
     file: UploadFile = File(...),
     activity_id: int = None,

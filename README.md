@@ -94,20 +94,37 @@ mysql -u root -p event_assistant < database/schema.sql
 python database/init_db.py
 ```
 
-### 3. 一键启动
+### 3. Docker Compose 一键部署（推荐）
 
 ```bash
-# 会自动配置虚拟环境、安装依赖、启动前后端
-bash run.sh
+cp .env.example .env
+# 编辑 .env 填入必要配置
+
+docker-compose up --build -d
+# 访问 http://localhost
 ```
 
-### 4. 手动启动
+### 4. 传统服务器部署
+
+```bash
+# 1. 上传到 /root/sh-ai/
+# 2. 复制并编辑 .env
+cd /root/sh-ai
+bash deploy/install.sh
+```
+
+更新代码后执行：
+
+```bash
+bash deploy/update.sh
+```
+
+### 5. 本地开发
 
 ```bash
 # 后端
-cd SH-AIv2
 python -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 python main.py
 # 访问 http://localhost:8000/api/docs
@@ -141,6 +158,16 @@ SH-AIv2/
 │       ├── stores/        # Pinia 状态管理
 │       └── views/         # 页面组件
 ├── static/                 # 静态文件/上传目录
+├── deploy/                 # 服务器部署脚本与配置
+│   ├── install.sh         # 首次安装脚本
+│   ├── update.sh          # 更新脚本
+│   ├── nginx-http.conf    # HTTP 版 Nginx 配置
+│   ├── nginx-https.conf   # HTTPS 版 Nginx 配置
+│   └── supervisor.ini     # Supervisor 配置模板
+├── docker/                 # Docker 部署配置
+│   └── nginx.conf         # 容器内 Nginx 配置
+├── docker-compose.yml      # Docker Compose 编排
+├── Dockerfile              # 后端镜像构建
 ├── requirements.txt        # Python 依赖
 └── run.sh                  # 一键启动脚本
 ```

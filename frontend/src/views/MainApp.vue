@@ -1,14 +1,14 @@
 <template>
   <div class="app-container">
-    <!-- 左侧导航栏 -->
-    <div class="sidebar">
+    <!-- 桌面端左侧导航栏 -->
+    <div class="sidebar desktop-only">
       <div class="logo">
         <span>🎫</span>
         活动助手
       </div>
-      
-      <button 
-        v-for="item in navItems" 
+
+      <button
+        v-for="item in navItems"
         :key="item.id"
         :class="['nav-btn', { active: currentPage === item.id }]"
         @click="switchPage(item.id)"
@@ -18,19 +18,33 @@
       </button>
 
       <div style="flex: 1;"></div>
-      
-      <!-- 访客卡片 -->
+
+      <!-- 主办方入口 -->
       <div v-if="!userStore.token" class="guest-card">
         <div style="font-size: 24px; margin-bottom: 8px;">👤</div>
         <div style="font-size: 14px; color: #666;">访客用户</div>
-        <div style="font-size: 12px; color: #888; margin-top: 4px;">体验模式</div>
+        <div style="font-size: 12px; color: #888; margin-top: 4px;">
+          <a class="link-btn" @click="$router.push('/login')">主办方登录</a>
+        </div>
       </div>
 
-      <!-- 管理员卡片 -->
       <div v-else class="user-info-card">
         <div class="user-avatar">🏢</div>
-        <div class="user-name">{{ userStore.userInfo?.organizer_name || '管理员' }}</div>
+        <div class="user-name">{{ userStore.userInfo?.organizer_name || '主办方' }}</div>
         <div class="user-role">已登录</div>
+        <a class="link-btn" style="color: white; opacity: 0.9;" @click="$router.push('/admin/activities')">我的活动</a>
+      </div>
+    </div>
+
+    <!-- 移动端顶部栏 -->
+    <div class="mobile-header mobile-only">
+      <div class="logo">
+        <span>🎫</span>
+        活动助手
+      </div>
+      <div class="mobile-actions">
+        <el-button v-if="!userStore.token" link type="primary" size="small" @click="$router.push('/login')">登录</el-button>
+        <el-button v-else link type="primary" size="small" @click="$router.push('/admin/activities')">我的</el-button>
       </div>
     </div>
 
@@ -197,7 +211,10 @@
               <span>📤</span>
               活动信息上传
             </div>
-            <button class="logout-btn" @click="handleLogout">退出登录</button>
+            <div class="upload-actions">
+              <el-button size="small" @click="$router.push('/admin/activities')">我的活动</el-button>
+              <button class="logout-btn" @click="handleLogout">退出登录</button>
+            </div>
           </div>
 
           <el-form :model="activityForm" label-width="120px" size="default">
@@ -435,6 +452,19 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- 移动端底部导航 -->
+    <div class="bottom-nav mobile-only">
+      <button
+        v-for="item in navItems"
+        :key="item.id"
+        :class="['bottom-nav-btn', { active: currentPage === item.id }]"
+        @click="switchPage(item.id)"
+      >
+        <span class="nav-icon">{{ item.icon }}</span>
+        <span class="nav-label">{{ item.name }}</span>
+      </button>
     </div>
   </div>
 </template>
@@ -1153,6 +1183,10 @@ const drawRouteOnMap = (routeData, noFit = false) => {
   padding: 20px;
   gap: 20px;
   background: #faf8f5;
+}
+
+.mobile-only {
+  display: none;
 }
 
 /* 左侧导航栏 */
@@ -1949,5 +1983,138 @@ const drawRouteOnMap = (routeData, noFit = false) => {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #adb5bd;
+}
+
+.upload-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+    padding: 0;
+    gap: 0;
+    padding-bottom: 70px;
+  }
+
+  .desktop-only {
+    display: none !important;
+  }
+
+  .mobile-only {
+    display: flex;
+  }
+
+  .mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: white;
+    border-bottom: 1px solid #eee;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .main-content {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .top-bar {
+    padding: 12px 16px;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .weather-card {
+    width: 100%;
+  }
+
+  .date-info {
+    text-align: left;
+    width: 100%;
+  }
+
+  .content-panel {
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .chat-page,
+  .organizer-page,
+  .navigation-page {
+    height: auto;
+    min-height: calc(100vh - 180px);
+  }
+
+  .chat-input-area {
+    flex-direction: column;
+  }
+
+  .send-btn {
+    width: 100%;
+  }
+
+  .login-box,
+  .register-box {
+    width: 100%;
+    max-width: 100%;
+    padding: 24px;
+  }
+
+  .nav-content {
+    flex-direction: column;
+  }
+
+  .nav-sidebar {
+    width: 100%;
+  }
+
+  .map-container {
+    min-height: 300px;
+  }
+
+  .bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 60px;
+    background: white;
+    border-top: 1px solid #eee;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    z-index: 200;
+  }
+
+  .bottom-nav-btn {
+    flex: 1;
+    height: 100%;
+    border: none;
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    color: #666;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .bottom-nav-btn.active {
+    color: #667eea;
+  }
+
+  .bottom-nav-btn .nav-icon {
+    font-size: 20px;
+  }
 }
 </style>

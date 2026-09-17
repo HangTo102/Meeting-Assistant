@@ -2,12 +2,18 @@
   <div class="activity-detail" v-loading="loading">
     <div v-if="activity" class="content">
       <el-page-header @back="$router.back()" :title="activity.activity_name" />
-      
+
       <el-card style="margin-top: 20px">
         <template #header>
           <div class="card-header">
             <h3>{{ activity.activity_name }}</h3>
-            <el-tag :type="statusType(activity.status)">{{ statusText(activity.status) }}</el-tag>
+            <div class="header-actions">
+              <el-tag :type="statusType(activity.status)">{{ statusText(activity.status) }}</el-tag>
+              <template v-if="isAdminMode">
+                <el-button size="small" type="primary" @click="editActivity">编辑</el-button>
+                <el-button size="small" type="danger" @click="deleteActivity">删除</el-button>
+              </template>
+            </div>
           </div>
         </template>
 
@@ -24,6 +30,7 @@
           <el-descriptions-item label="票务信息" :span="2">
             {{ activity.requires_ticket ? '需要购票' : '免费入场' }}
             <span v-if="activity.ticket_price"> - {{ activity.ticket_price }}</span>
+            <a v-if="activity.ticket_url" :href="activity.ticket_url" target="_blank" class="ticket-link">去购票</a>
           </el-descriptions-item>
           <el-descriptions-item label="浏览次数" :span="2">
             {{ activity.view_count }}
@@ -34,8 +41,8 @@
         </el-descriptions>
 
         <!-- 子活动列表 -->
-        <div style="margin-top: 30px">
-          <h4>子活动</h4>
+        <div class="section" v-if="subActivities.length > 0">
+          <h4>子活动 / 分会场</h4>
           <el-table :data="subActivities" style="margin-top: 10px">
             <el-table-column prop="sub_name" label="名称" />
             <el-table-column prop="start_time" label="时间" width="180">
@@ -46,7 +53,7 @@
         </div>
 
         <!-- 标签列表 -->
-        <div style="margin-top: 20px">
+        <div class="section" v-if="tags.length > 0">
           <h4>标签</h4>
           <div style="margin-top: 10px">
             <el-tag v-for="tag in tags" :key="tag.id" style="margin-right: 10px">{{ tag.tag_name }}</el-tag>
@@ -59,15 +66,19 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { activityAPI, subActivityAPI, tagAPI } from '@/api'
 
 const route = useRoute()
+const router = useRouter()
+
 const activity = ref(null)
 const subActivities = ref([])
 const tags = ref([])
 const loading = ref(true)
+
+const isAdminMode = computed(() => route.path.startsWith('/admin'))
 
 const statusType = (status) => {
   const types = { 0: 'info', 1: 'success', 2: 'warning', 3: 'danger' }
@@ -102,6 +113,18 @@ const loadData = async () => {
   }
 }
 
+const editActivity = () => router.push(`/admin/activities/${route.params.id}/edit`)
+const deleteActivity = async () => {
+  try {
+    await ElMessageBox.confirm('确定删除该活动？', '提示', { type: 'warning' })
+    await activityAPI.delete(route.params.id)
+    ElMessage.success('删除成功')
+    router.push('/admin/activities')
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error('删除失败')
+  }
+}
+
 onMounted(() => {
   loadData()
 })
@@ -110,8 +133,8 @@ onMounted(() => {
 <style scoped>
 .activity-detail {
   background: white;
-  padding: 30px;
-  border-radius: 20px;
+  padding: 24px;
+  border-radius: 16px;
   min-height: 100%;
 }
 
@@ -119,9 +142,37 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .card-header h3 {
   margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.section {
+  margin-top: 30px;
+}
+
+.ticket-link {
+  margin-left: 12px;
+  color: #667eea;
+}
+
+@media (max-width: 768px) {
+  .activity-detail {
+    padding: 16px;
+    border-radius: 0;
+  }
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 </style>

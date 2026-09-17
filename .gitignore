@@ -40,5 +40,11 @@ static/uploads/*
 # Logs
 *.log
 
+# 本地备份文档（含隐私/参赛作品材料，不上传 GitHub）
+backup/
+
+# 嵌套的旧项目副本
+Meeting-Assistant/
+
 # Prototype（仅开发用，不上传）
 prototype.html

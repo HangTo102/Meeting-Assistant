@@ -45,6 +45,7 @@ export const authAPI = {
 export const activityAPI = {
   list: (params) => api.get('/activities', { params }),
   get: (id) => api.get(`/activities/${id}`),
+  getMyActivities: () => api.get('/activities/my'),
   create: (data) => api.post('/activities', data),
   update: (id, data) => api.put(`/activities/${id}`, data),
   delete: (id) => api.delete(`/activities/${id}`),

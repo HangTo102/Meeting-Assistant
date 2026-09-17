@@ -58,7 +58,7 @@ class ChatHistoryResponse(BaseModel):
     created_at: datetime
 
 
-@router.post("/", response_model=ChatResponse)
+@router.post("", response_model=ChatResponse)
 async def chat(request: ChatRequest, http_request: Request, db: Session = Depends(get_db)):
     """与 AI 助手对话（支持上下文记忆）"""
     

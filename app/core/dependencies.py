@@ -2,7 +2,7 @@
 依赖注入：数据库会话、用户认证
 """
 from typing import Generator
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -17,8 +17,7 @@ class _HTTPBearer401(HTTPBearer):
     def __init__(self):
         super().__init__(auto_error=True)
 
-    async def __call__(self, request):
-        from fastapi import Request
+    async def __call__(self, request: Request):
         credentials = await super().__call__(request)
         if credentials is None:
             raise HTTPException(

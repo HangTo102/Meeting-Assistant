@@ -99,7 +99,7 @@ const handleLogin = async () => {
     userStore.setToken(res.data.access_token)
     userStore.setUserInfo(res.data.user_info)
     ElMessage.success('登录成功')
-    router.push('/dashboard')
+    router.push('/admin')
   } catch (error) {
     ElMessage.error(error.response?.data?.detail || '登录失败')
   } finally {

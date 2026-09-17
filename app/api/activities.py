@@ -62,6 +62,7 @@ class ActivityResponse(BaseModel):
     view_count: int
     created_at: datetime
     updated_at: datetime
+    tag_list: List[str] = []
     
     class Config:
         from_attributes = True
@@ -69,7 +70,7 @@ class ActivityResponse(BaseModel):
 
 # ========== API 接口 ==========
 
-@router.post("/", response_model=ActivityResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ActivityResponse, status_code=status.HTTP_201_CREATED)
 def create_activity(
     request: ActivityCreate,
     db: Session = Depends(get_db),
@@ -89,7 +90,7 @@ def create_activity(
     return activity
 
 
-@router.get("/", response_model=List[ActivityResponse])
+@router.get("", response_model=List[ActivityResponse])
 def get_activities(
     status_filter: Optional[int] = Query(None, alias="status"),
     page: int = Query(1, ge=1),
@@ -106,6 +107,20 @@ def get_activities(
     # 分页
     offset = (page - 1) * page_size
     activities = query.order_by(Activity.start_time.desc()).offset(offset).limit(page_size).all()
+    
+    return activities
+
+
+@router.get("/my", response_model=List[ActivityResponse])
+def get_my_activities(
+    db: Session = Depends(get_db),
+    current_user: Organizer = Depends(get_current_user)
+):
+    """获取当前主办方的所有活动（含草稿/已发布/已取消，用于后台管理）"""
+    
+    activities = db.query(Activity).filter(
+        Activity.organizer_id == current_user.id
+    ).order_by(Activity.created_at.desc()).all()
     
     return activities
 
