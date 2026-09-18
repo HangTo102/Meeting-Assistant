@@ -1,0 +1,50 @@
+# --- 环境变量/密钥（切勿提交）---
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+.venv/
+
+# Node / Frontend
+node_modules/
+dist/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads
+static/uploads/*
+!static/uploads/.gitkeep
+
+# Logs
+*.log
+
+# 本地备份文档（含隐私/参赛作品材料，不上传 GitHub）
+backup/
+
+# 嵌套的旧项目副本
+Meeting-Assistant/
+
+# Prototype（仅开发用，不上传）
+prototype.html

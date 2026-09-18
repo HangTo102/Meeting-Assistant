@@ -1,0 +1,136 @@
+"""
+会场精灵 - 数据库配置
+
+使用方式:
+1. 复制此文件为 config.py
+2. 修改数据库连接信息
+3. 在应用中使用: from database.config import DATABASE_URL, engine, SessionLocal
+"""
+
+import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
+
+# ============================================
+# 数据库连接配置
+# ============================================
+
+# 方式1: 使用环境变量
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "mysql+pymysql://root:password@localhost:3306/event_assistant?charset=utf8mb4"
+)
+
+# 方式2: 手动配置 (取消注释使用)
+# DATABASE_URL = "mysql+pymysql://用户名:密码@主机:端口/数据库名?charset=utf8mb4"
+
+# 方式3: 分参数配置
+DB_CONFIG = {
+    "driver": "mysql+pymysql",
+    "username": os.getenv("DB_USER", "root"),
+    "password": os.getenv("DB_PASSWORD", "password"),
+    "host": os.getenv("DB_HOST", "localhost"),
+    "port": int(os.getenv("DB_PORT", "3306")),
+    "database": os.getenv("DB_NAME", "event_assistant"),
+}
+
+# DATABASE_URL = (
+#     f"{DB_CONFIG['driver']}://"
+#     f"{DB_CONFIG['username']}:{DB_CONFIG['password']}@"
+#     f"{DB_CONFIG['host']}:{DB_CONFIG['port']}/"
+#     f"{DB_CONFIG['database']}?charset=utf8mb4"
+# )
+
+
+# ============================================
+# SQLAlchemy 引擎配置
+# ============================================
+
+# 连接池配置
+engine = create_engine(
+    DATABASE_URL,
+    # 连接池大小
+    pool_size=20,
+    # 最大溢出连接数
+    max_overflow=0,
+    # 连接超时时间(秒)
+    pool_timeout=30,
+    # 连接回收时间(秒)
+    pool_recycle=3600,
+    # 空闲连接检测
+    pool_pre_ping=True,
+    # 是否显示SQL语句 (调试用)
+    echo=False,
+)
+
+# 会话工厂
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
+
+
+# ============================================
+# 便捷函数
+# ============================================
+
+def get_db():
+    """
+    获取数据库会话 (FastAPI 风格)
+    
+    使用示例:
+        @app.get("/items/")
+        def read_items(db: Session = Depends(get_db)):
+            return db.query(Item).all()
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def get_db_session():
+    """
+    获取数据库会话 (上下文管理器风格)
+    
+    使用示例:
+        with get_db_session() as db:
+            result = db.query(User).first()
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# 兼容旧版本
+get_db_session_context = get_db_session
+
+
+# ============================================
+# 测试连接
+# ============================================
+
+def test_connection():
+    """测试数据库连接"""
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT 1"))
+            print(f"✅ 数据库连接成功！")
+            print(f"   URL: {DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL}")
+            return True
+    except Exception as e:
+        print(f"❌ 数据库连接失败: {e}")
+        return False
+
+
+if __name__ == "__main__":
+    test_connection()

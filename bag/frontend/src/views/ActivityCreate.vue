@@ -101,24 +101,6 @@
           <el-button style="width: 100%" @click="addSub">+ 添加子活动</el-button>
         </div>
 
-        <!-- 附件上传 -->
-        <div class="section">
-          <div class="section-title">附件上传</div>
-          <el-upload
-            v-model:file-list="fileList"
-            action="#"
-            :auto-upload="false"
-            multiple
-            :limit="10"
-            :on-exceed="() => ElMessage.warning('最多上传 10 个附件')"
-          >
-            <el-button type="primary">选择文件</el-button>
-            <template #tip>
-              <div class="upload-tip">支持 PDF、Word、图片等格式，创建/保存活动后自动上传</div>
-            </template>
-          </el-upload>
-        </div>
-
         <el-form-item>
           <el-button type="primary" :loading="loading" @click="handleSubmit">{{ isEdit ? '保存' : '提交' }}</el-button>
           <el-button @click="$router.back()">取消</el-button>
@@ -132,7 +114,7 @@
 import { ref, reactive, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { activityAPI, subActivityAPI, tagAPI, uploadAPI } from '@/api'
+import { activityAPI, subActivityAPI, tagAPI } from '@/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -165,8 +147,6 @@ const rules = {
 const tagInputVisible = ref(false)
 const tagInputValue = ref('')
 const tagInputRef = ref(null)
-const fileList = ref([])
-const uploadingFiles = ref(false)
 
 const showTagInput = () => {
   tagInputVisible.value = true
@@ -256,9 +236,11 @@ const handleSubmit = async () => {
     let actId = activityId.value
     if (isEdit.value) {
       await activityAPI.update(actId, data)
+      ElMessage.success('保存成功')
     } else {
       const res = await activityAPI.create(data)
       actId = res.data.id
+      ElMessage.success('创建成功')
     }
 
     // 保存子活动
@@ -290,20 +272,6 @@ const handleSubmit = async () => {
       await tagAPI.create({ activity_id: actId, tag_name: tagName })
     }
 
-    // 上传附件
-    if (fileList.value.length > 0) {
-      uploadingFiles.value = true
-      for (const file of fileList.value) {
-        try {
-          await uploadAPI.upload(file.raw, actId)
-        } catch (e) {
-          ElMessage.error(`附件 ${file.name} 上传失败`)
-        }
-      }
-      uploadingFiles.value = false
-    }
-
-    ElMessage.success(isEdit.value ? '保存成功' : '创建成功')
     router.push('/admin/activities')
   } catch (error) {
     ElMessage.error(error.response?.data?.detail || '操作失败')
@@ -342,11 +310,6 @@ const handleSubmit = async () => {
   align-items: center;
   margin-bottom: 12px;
   font-weight: 500;
-}
-.upload-tip {
-  font-size: 12px;
-  color: #999;
-  margin-top: 8px;
 }
 @media (max-width: 768px) {
   .activity-create {
