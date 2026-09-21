@@ -1,0 +1,46 @@
+# ============================================
+# Docker 构建上下文排除清单
+# 目的：缩小构建上下文、避免密钥进入镜像、加速构建
+# ============================================
+
+# ---- 版本控制 ----
+.git
+.gitignore
+
+# ---- Python ----
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+venv
+.venv
+**/.venv
+
+# ---- Node / 前端 ----
+**/node_modules
+**/dist
+
+# ---- 环境变量（密钥，禁止进入镜像）----
+.env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
+
+# ---- 本地备份 / 旧副本（不参与构建）----
+backup
+bag
+Meeting-Assistant
+
+# ---- 日志 / 上传文件 ----
+*.log
+**/*.log
+static/uploads/*
+!static/uploads/.gitkeep
+
+# ---- 文档 / IDE / 杂项 ----
+*.md
+docs
+.idea
+.vscode
+prototype.html
